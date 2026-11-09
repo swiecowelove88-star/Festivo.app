@@ -1,0 +1,58 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+body {
+  background-color: #182022;
+  color: #f8fafc;
+}
+
+/* Allow text selection inside modals or input fields */
+input, textarea, [data-selectable="true"] {
+  user-select: text;
+}
+
+/* Padding for page content so it never gets covered by the fixed bottom tab bar */
+.content-pb-safe {
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 88px);
+}
+
+/* Padding for the fixed bottom tab bar itself - strictly glued to the bottom edge of phone */
+.tabbar-pb-safe {
+  padding-bottom: max(env(safe-area-inset-bottom, 0px), 6px);
+}
+
+.pt-safe {
+  padding-top: max(env(safe-area-inset-top, 0px), 8px);
+}
+
+/* Custom scrollbars with Monument Valley Palette */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: #182022;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #425759;
+  border-radius: 6px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #D97652;
+}
+
+/* Smooth rendering */
+* {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}

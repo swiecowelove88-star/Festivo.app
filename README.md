@@ -1,4 +1,4 @@
-# Festivo Kalendarz Świąt & Social Media Planner (AI)
+# Festivo — Kalendarz Świąt & Social Media Planner (AI)
 
 > **Festivo** to nowoczesna aplikacja mobilna i webowa (PWA + natywny Android APK) stworzona do planowania treści w mediach społecznościowych i odkrywania świąt nietypowych na każdy dzień roku. Wbudowany moduł sztucznej inteligencji automatycznie generuje wiralowe scenariusze na **TikTok** oraz angażujące posty na **Facebook**.
 
