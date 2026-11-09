@@ -2,6 +2,8 @@
 
 > **Festivo** to nowoczesna aplikacja mobilna i webowa (PWA + natywny Android APK) stworzona do planowania treści w mediach społecznościowych i odkrywania świąt nietypowych na każdy dzień roku. Wbudowany moduł sztucznej inteligencji automatycznie generuje wiralowe scenariusze na **TikTok** oraz angażujące posty na **Facebook**.
 
+[![Pobierz APK](https://img.shields.io/badge/Pobierz_APK-MediaFire-E55B3C?style=for-the-badge&logo=android&logoColor=white)](https://www.mediafire.com/file/pu2rlvgihp619pr/Festivo.apk/file)
+
 **Autor:** Eryk Paluch  
 **Licencja:** MIT  
 
@@ -69,8 +71,11 @@
 ## 📲 Instalacja na Telefonie
 
 ### 🤖 Android (Plik .APK)
-1. Pobierz plik `festivo.apk` bezpośrednio z aplikacji (zakładka *„Aplikacja”* lub skanując kod QR).
-2. Dotknij pobranego pliku i wybierz **Zainstaluj**.
+* 📥 **Bezpośredni link do pobrania APK:**  
+  👉 **[Pobierz Festivo.apk (MediaFire)](https://www.mediafire.com/file/pu2rlvgihp619pr/Festivo.apk/file)**
+
+1. Pobierz plik `Festivo.apk` z powyższego linku (lub bezpośrednio w aplikacji w zakładce *„Aplikacja”*).
+2. Dotknij pobranego pliku w powiadomieniach lub w menedżerze plików i wybierz **Zainstaluj**.
 3. Jeśli system poprosi o zgodę na instalację z nieznanych źródeł, zaznacz *„Zezwalaj z tego źródła”*.
 
 ### 🍎 iPhone (iOS / Safari)
