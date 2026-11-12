@@ -59,7 +59,9 @@ export const GEMINI_MODELS: AIModelOption[] = [
   { id: 'gemini-4-argon', name: 'Gemini 4 Argon (Flagowy model rozumujący)' },
   { id: 'gemini-3.1-pro-preview', name: 'Gemini 3.1 Pro Preview' },
   { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash Preview' },
-  { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash (Starszy — może wymagać historii użycia)' },
+  { id: 'gemini-3-pro-preview', name: 'Gemini 3 Pro Preview' },
+  { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash (Starszy — wymaga historii użycia)' },
+  { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash-Lite (Starszy)' },
   { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro (Starszy)' },
 ];
 
@@ -104,14 +106,36 @@ export function hasConfiguredAI(): boolean {
   return false;
 }
 
+const MODEL_CACHE_PREFIX = 'festivo_models_cache_';
+
+export function getCachedModels(provider: AIProvider): AIModelOption[] {
+  try {
+    const raw = localStorage.getItem(`${MODEL_CACHE_PREFIX}${provider}`);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveCachedModels(provider: AIProvider, models: AIModelOption[]): void {
+  try {
+    localStorage.setItem(`${MODEL_CACHE_PREFIX}${provider}`, JSON.stringify(models));
+  } catch {
+    // ignore storage quota errors
+  }
+}
+
 /**
  * Fetches ALL live models available for this Gemini API key!
+ * Text/chat models are sorted first; specialized models are tagged instead of hidden.
  */
 export async function fetchLiveGeminiModels(apiKey: string): Promise<AIModelOption[]> {
   const cleanKey = apiKey.trim();
   if (!cleanKey) return [];
 
-  const allModels: AIModelOption[] = [];
+  const allModels: (AIModelOption & { _sortRank: number })[] = [];
   let pageToken = '';
 
   do {
@@ -135,26 +159,59 @@ export async function fetchLiveGeminiModels(apiKey: string): Promise<AIModelOpti
     const models = data.models || [];
     for (const m of models) {
       const id = (m.name || '').replace(/^models\//, '');
+      if (!id) continue;
+
       const methods: string[] = m.supportedGenerationMethods || [];
       const lowerId = id.toLowerCase();
-      // Include all text/multimodal generation models; exclude pure embedding/imagen/aqa/tts-only
-      const supportsText = methods.includes('generateContent');
-      const isNonChat =
-        lowerId.includes('embedding') ||
-        lowerId.includes('aqa') ||
-        lowerId.includes('imagen') ||
-        lowerId.includes('veo');
+      const supportsChat =
+        methods.includes('generateContent') ||
+        methods.includes('streamGenerateContent') ||
+        methods.length === 0;
 
-      if (id && supportsText && !isNonChat) {
-        const label = m.displayName ? `${m.displayName} (${id})` : id;
-        allModels.push({ id, name: label });
+      let suffix = '';
+      let isNonChat = false;
+      if (lowerId.includes('embedding') || lowerId.includes('embed-')) {
+        suffix = ' [Embedding]';
+        isNonChat = true;
+      } else if (lowerId.includes('imagen')) {
+        suffix = ' [Obraz]';
+        isNonChat = true;
+      } else if (lowerId.includes('veo')) {
+        suffix = ' [Wideo]';
+        isNonChat = true;
+      } else if (lowerId.includes('tts')) {
+        suffix = ' [TTS/Audio]';
+        isNonChat = true;
+      } else if (lowerId.includes('aqa')) {
+        suffix = ' [AQA]';
+        isNonChat = true;
+      } else if (!supportsChat) {
+        suffix = ' [Inny tryb]';
+        isNonChat = true;
       }
+
+      const display = m.displayName ? `${m.displayName} (${id})` : id;
+      allModels.push({
+        id,
+        name: `${display}${suffix}`,
+        _sortRank: isNonChat ? 1 : 0,
+      });
     }
 
     pageToken = data.nextPageToken || '';
   } while (pageToken);
 
-  return allModels;
+  const sorted: AIModelOption[] = allModels
+    .sort((a, b) => {
+      if (a._sortRank !== b._sortRank) return a._sortRank - b._sortRank;
+      return a.id.localeCompare(b.id);
+    })
+    .map(({ id, name }) => ({ id, name }));
+
+  if (sorted.length > 0) {
+    saveCachedModels('gemini', sorted);
+  }
+  return sorted;
 }
 
 /**
@@ -209,6 +266,9 @@ export async function fetchLiveGroqModels(apiKey: string): Promise<AIModelOption
       return a.id.localeCompare(b.id);
     });
 
+  if (mapped.length > 0) {
+    saveCachedModels('groq', mapped);
+  }
   return mapped;
 }
 

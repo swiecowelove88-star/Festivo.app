@@ -1,11 +1,11 @@
-// Service Worker for Kalendarz Swiat PWA
-const CACHE_NAME = 'swieta-pwa-v1';
+// Service Worker for Festivo PWA
+const CACHE_NAME = 'festivo-pwa-v2';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
   './manifest.webmanifest',
-  './icon-192.svg',
-  './icon-512.svg'
+  './icon-192.png',
+  './icon-512.png'
 ];
 
 self.addEventListener('install', (event) => {
@@ -33,7 +33,11 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  // Network first with offline cache fallback
+  if (event.request.method !== 'GET') {
+    return;
+  }
+
+  // Network first with offline cache fallback for GET requests only
   event.respondWith(
     fetch(event.request)
       .then((networkResponse) => {
