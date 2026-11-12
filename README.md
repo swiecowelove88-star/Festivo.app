@@ -4,7 +4,7 @@
 
 <p>
   <a href="https://festivoapp.vercel.app/"><img src="https://img.shields.io/badge/Aplikacja_Online-festivoapp.vercel.app-243235?style=for-the-badge&logo=vercel&logoColor=white" alt="Vercel App" /></a>
-  <a href="https://www.mediafire.com/file/pu2rlvgihp619pr/Festivo.apk/file"><img src="https://img.shields.io/badge/Pobierz_APK-MediaFire-D97652?style=for-the-badge&logo=android&logoColor=white" alt="MediaFire APK" /></a>
+  <a href="https://www.mediafire.com/file/bvgxsxgury9h9qm/festivo.apk/file"><img src="https://img.shields.io/badge/Pobierz_APK-MediaFire-D97652?style=for-the-badge&logo=android&logoColor=white" alt="MediaFire APK" /></a>
 </p>
 
 **Autor:** Eryk Paluch  
@@ -34,7 +34,7 @@ Możesz zainstalować Festivo jako aplikację mobilną dodając skrót do ekranu
 1. Otwórz stronę **[festivoapp.vercel.app](https://festivoapp.vercel.app/)** w przeglądarce Chrome.
 2. Kliknij menu z trzema kropkami (`⋮`) w prawym górnym rogu.
 3. Wybierz opcję **Zainstaluj aplikację** lub **Dodaj do ekranu głównego**.
-4. Alternatywnie możesz pobrać gotowy plik instalacyjny: [Pobierz Festivo.apk (MediaFire)](https://www.mediafire.com/file/pu2rlvgihp619pr/Festivo.apk/file).
+4. Alternatywnie możesz pobrać gotowy plik instalacyjny: [Pobierz Festivo.apk (MediaFire)](https://www.mediafire.com/file/bvgxsxgury9h9qm/festivo.apk/file).
 
 ## 🌟 Główne Funkcje
 

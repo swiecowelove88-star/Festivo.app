@@ -24,6 +24,7 @@ type QrTargetMode = 'online' | 'apk' | 'local';
 
 const ONLINE_URL = 'https://festivoapp.vercel.app/';
 const APK_DIRECT_URL = 'https://festivoapp.vercel.app/festivo.apk';
+const APK_MEDIAFIRE_URL = 'https://www.mediafire.com/file/bvgxsxgury9h9qm/festivo.apk/file';
 const FALLBACK_LOCAL_URL = 'http://10.10.201.47:5173';
 
 export const InstallAppModal: React.FC<InstallAppModalProps> = ({
@@ -307,6 +308,16 @@ export const InstallAppModal: React.FC<InstallAppModalProps> = ({
               Wybierz <strong className="text-[#F2AB91]">"Zainstaluj aplikację"</strong> lub <strong className="text-[#F2AB91]">"Dodaj do ekranu głównego"</strong>.
             </li>
           </ol>
+          <a
+            href={APK_MEDIAFIRE_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => triggerHaptic()}
+            className="mt-3 w-full py-2 px-3 rounded-xl bg-[#243235] hover:bg-[#2C3B3E] text-[#F2AB91] border border-[#D97652]/40 text-xs font-bold flex items-center justify-center gap-1.5 transition-all active:scale-95"
+          >
+            <Download className="w-3.5 h-3.5 text-[#D97652]" />
+            <span>Pobierz najnowszy plik festivo.apk (MediaFire)</span>
+          </a>
         </div>
 
         {/* iPhone (iOS Safari) Guide */}
