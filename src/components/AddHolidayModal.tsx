@@ -15,8 +15,6 @@ export const AddHolidayModal: React.FC<AddHolidayModalProps> = ({
   onClose,
   onAddHoliday,
 }) => {
-  if (!isOpen) return null;
-
   const [name, setName] = useState('');
   const [month, setMonth] = useState(new Date().getMonth() + 1);
   const [day, setDay] = useState(new Date().getDate());
@@ -27,6 +25,8 @@ export const AddHolidayModal: React.FC<AddHolidayModalProps> = ({
   const [dressCode, setDressCode] = useState('');
   const [hashtags, setHashtags] = useState('');
   const [isPublicHoliday, setIsPublicHoliday] = useState(false);
+
+  if (!isOpen) return null;
 
   const popularEmojis = ['🎉', '🍕', '🎓', '❤️', '🔥', '🍰', '🐶', '🎵', '🚀', '📚', '🏆', '👗'];
 

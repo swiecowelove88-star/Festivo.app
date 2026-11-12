@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Bot,
   Calendar,
@@ -52,8 +52,6 @@ export const HolidayDetailModal: React.FC<HolidayDetailModalProps> = ({
   onClose,
   onOpenAISettings,
 }) => {
-  if (!holiday) return null;
-
   const [copiedTags, setCopiedTags] = useState(false);
   const [copiedAITikTok, setCopiedAITikTok] = useState(false);
   const [copiedAIFb, setCopiedAIFb] = useState(false);
@@ -66,6 +64,13 @@ export const HolidayDetailModal: React.FC<HolidayDetailModalProps> = ({
   const [activeAITab, setActiveAITab] = useState<'tiktok' | 'facebook' | 'raw'>('tiktok');
   const [selectedTone, setSelectedTone] = useState<AITone>('humor');
   const [isExpanded, setIsExpanded] = useState(false);
+
+  useEffect(() => {
+    setAiResult(null);
+    setAiError(null);
+  }, [holiday?.id]);
+
+  if (!holiday) return null;
 
   const countdown = getCountdownBadge(holiday);
   const monthName = MONTHS.find((m) => m.number === holiday.month)?.name || '';

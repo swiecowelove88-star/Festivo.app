@@ -15,6 +15,13 @@
 Aplikacja jest dostępna publicznie pod adresem:  
 👉 **[https://festivoapp.vercel.app](https://festivoapp.vercel.app/)**
 
+Zeskanuj wybrany kod QR aparatem w telefonie:
+
+| iPhone & Android (Wersja Online / PWA) | Android (Bezpośrednie pobieranie APK) |
+| :---: | :---: |
+| <img src="public/qr-festivo.png" width="180" alt="Kod QR Festivo Online" /> | <img src="public/qr-festivo-apk.png" width="180" alt="Kod QR Festivo APK" /> |
+| **[festivoapp.vercel.app](https://festivoapp.vercel.app/)** | **[Pobierz Festivo.apk](https://festivoapp.vercel.app/festivo.apk)** |
+
 Możesz zainstalować Festivo jako aplikację mobilną dodając skrót do ekranu głównego:
 
 ### 🍎 iPhone (iOS / Safari)

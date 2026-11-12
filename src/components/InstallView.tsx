@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import QRCode from 'qrcode';
 import {
   Check,
   Copy,
@@ -6,10 +7,7 @@ import {
   FileCheck,
   Package,
   QrCode,
-  Smartphone,
   Wifi,
-  Zap,
-  Sparkles
 } from 'lucide-react';
 import { triggerHaptic } from '../utils/calendarUtils';
 
@@ -24,9 +22,10 @@ export const InstallView: React.FC<InstallViewProps> = ({
 }) => {
   const [copiedApkUrl, setCopiedApkUrl] = useState(false);
   const [copiedWebUrl, setCopiedWebUrl] = useState(false);
+  const [qrDataUrl, setQrDataUrl] = useState<string>('');
 
   // Network origin
-  const localIp = '10.10.201.50';
+  const localIp = '10.10.201.47';
   const localPort = '5173';
   const networkOrigin = `http://${localIp}:${localPort}`;
 
@@ -39,6 +38,23 @@ export const InstallView: React.FC<InstallViewProps> = ({
 
   const apkUrl = `${activeOrigin}/festivo.apk`;
   const webUrl = activeOrigin;
+
+  useEffect(() => {
+    let cancelled = false;
+    QRCode.toDataURL(apkUrl, {
+      width: 400,
+      margin: 2,
+      errorCorrectionLevel: 'M',
+      color: { dark: '#182022', light: '#FFFFFF' },
+    })
+      .then((url) => {
+        if (!cancelled) setQrDataUrl(url);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [apkUrl]);
 
   const handleCopyApkUrl = () => {
     triggerHaptic();
@@ -70,7 +86,7 @@ export const InstallView: React.FC<InstallViewProps> = ({
           Festivo na telefon (Redmi 8 & Android)
         </h2>
         <p className="text-xs sm:text-sm text-[#BCC3C9] mt-1.5 leading-relaxed">
-          Pobierz bezpośredni instalator <strong className="text-white">festivo.apk</strong> (4.3 MB). Działa natywnie na telefonie bez konieczności korzystania ze sklepu Play.
+          Pobierz bezpośredni instalator <strong className="text-white">festivo.apk</strong> (12 MB). Działa natywnie na telefonie bez konieczności korzystania ze sklepu Play.
         </p>
 
         {/* Action Buttons */}
@@ -82,7 +98,7 @@ export const InstallView: React.FC<InstallViewProps> = ({
             className="flex-1 py-3.5 px-4 rounded-xl bg-[#D97652] hover:bg-[#C26340] text-white font-bold text-sm shadow-md flex items-center justify-center gap-2 active:scale-95 transition-all text-center"
           >
             <Download className="w-4 h-4" />
-            <span>Pobierz festivo.apk (4.3 MB)</span>
+            <span>Pobierz festivo.apk (12 MB)</span>
           </a>
 
           <button
@@ -102,12 +118,15 @@ export const InstallView: React.FC<InstallViewProps> = ({
           </div>
 
           <div className="p-3 bg-white rounded-xl shadow-lg">
-            <img
-              src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(apkUrl)}`}
-              alt="Kod QR do pobrania festivo.apk"
-              className="w-44 h-44 rounded-lg select-none"
-              loading="lazy"
-            />
+            {qrDataUrl ? (
+              <img
+                src={qrDataUrl}
+                alt="Kod QR do pobrania festivo.apk"
+                className="w-44 h-44 rounded-lg select-none"
+              />
+            ) : (
+              <div className="w-44 h-44 rounded-lg bg-[#243235] animate-pulse" />
+            )}
           </div>
 
           <p className="text-[11px] text-[#BCC3C9] max-w-sm leading-relaxed">

@@ -12,6 +12,11 @@ export interface AISettings {
   groqModel: string;
 }
 
+export interface AIModelOption {
+  id: string;
+  name: string;
+}
+
 export interface AIGenerationResult {
   tikTokIdea: {
     title: string;
@@ -36,29 +41,35 @@ export interface AIGenerationResult {
 const STORAGE_KEY = 'swieta_ai_settings';
 
 export const DEFAULT_AI_SETTINGS: AISettings = {
-  provider: 'groq',
+  provider: 'gemini',
   geminiApiKey: '',
-  geminiModel: 'gemini-2.5-flash',
+  geminiModel: 'gemini-3.8-flash',
   groqApiKey: '',
   groqModel: 'openai/gpt-oss-120b',
 };
 
-export const GEMINI_MODELS = [
-  { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash (Szybki i nowoczesny - Zalecany)' },
-  { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash' },
-  { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash' },
-  { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro (Najwyższa jakość)' },
+export const GEMINI_MODELS: AIModelOption[] = [
+  { id: 'gemini-3.8-flash', name: 'Gemini 3.8 Flash (Najnowszy — Zalecany)' },
+  { id: 'gemini-3.5-flash-lite', name: 'Gemini 3.5 Flash-Lite (Najszybszy)' },
+  { id: 'gemini-3.6-flash', name: 'Gemini 3.6 Flash (Stabilny)' },
+  { id: 'gemini-3.1-flash-lite', name: 'Gemini 3.1 Flash-Lite' },
+  { id: 'gemini-4-argon', name: 'Gemini 4 Argon (Flagowy model rozumujący)' },
+  { id: 'gemini-3.1-pro-preview', name: 'Gemini 3.1 Pro Preview' },
+  { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash Preview' },
+  { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash (Starszy — może wymagać historii użycia)' },
+  { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro (Starszy)' },
 ];
 
-export const GROQ_MODELS = [
-  { id: 'openai/gpt-oss-120b', name: 'GPT OSS 120B (openai/gpt-oss-120b - Najwyższa jakość, Zalecany)' },
-  { id: 'gpt-oss-120b', name: 'GPT OSS 120B (gpt-oss-120b)' },
-  { id: 'openai/gpt-oss-20b', name: 'GPT OSS 20B (openai/gpt-oss-20b - Bardzo szybki)' },
-  { id: 'gpt-oss-20b', name: 'GPT OSS 20B (gpt-oss-20b)' },
+export const GROQ_MODELS: AIModelOption[] = [
+  { id: 'openai/gpt-oss-120b', name: 'GPT OSS 120B (openai/gpt-oss-120b — Najwyższa jakość)' },
+  { id: 'openai/gpt-oss-20b', name: 'GPT OSS 20B (openai/gpt-oss-20b — Szybki)' },
   { id: 'qwen/qwen3.8-27b', name: 'Qwen 3.8 27B (qwen/qwen3.8-27b)' },
-  { id: 'qwen-3.8-27b', name: 'Qwen 3.8 27B (qwen-3.8-27b)' },
-  { id: 'llama-3.3-70b-versatile', name: 'Llama 3.3 70B (starszy model)' },
-  { id: 'llama-3.1-8b-instant', name: 'Llama 3.1 8B (starszy model)' },
+  { id: 'qwen/qwen3-32b', name: 'Qwen 3 32B (qwen/qwen3-32b)' },
+  { id: 'llama-3.3-70b-versatile', name: 'Llama 3.3 70B Versatile' },
+  { id: 'llama-3.1-8b-instant', name: 'Llama 3.1 8B Instant' },
+  { id: 'meta-llama/llama-4-scout-17b-16e-instruct', name: 'Llama 4 Scout 17B' },
+  { id: 'meta-llama/llama-4-maverick-17b-128e-instruct', name: 'Llama 4 Maverick 17B' },
+  { id: 'deepseek-r1-distill-llama-70b', name: 'DeepSeek R1 Distill Llama 70B' },
 ];
 
 export function getAISettings(): AISettings {
@@ -91,9 +102,62 @@ export function hasConfiguredAI(): boolean {
 }
 
 /**
- * Fetches the live list of models available for this specific Groq API key!
+ * Fetches ALL live models available for this Gemini API key!
  */
-export async function fetchLiveGroqModels(apiKey: string): Promise<string[]> {
+export async function fetchLiveGeminiModels(apiKey: string): Promise<AIModelOption[]> {
+  const cleanKey = apiKey.trim();
+  if (!cleanKey) return [];
+
+  const allModels: AIModelOption[] = [];
+  let pageToken = '';
+
+  do {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(cleanKey)}&pageSize=100${
+      pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : ''
+    }`;
+    const response = await fetch(url, { method: 'GET' });
+
+    if (!response.ok) {
+      let errorDetail = '';
+      try {
+        const err = await response.json();
+        errorDetail = err.error?.message || response.statusText;
+      } catch {
+        errorDetail = response.statusText;
+      }
+      throw new Error(`Błąd pobierania modeli Gemini (${response.status}): ${errorDetail}`);
+    }
+
+    const data = await response.json();
+    const models = data.models || [];
+    for (const m of models) {
+      const id = (m.name || '').replace(/^models\//, '');
+      const methods: string[] = m.supportedGenerationMethods || [];
+      const lowerId = id.toLowerCase();
+      // Include all text/multimodal generation models; exclude pure embedding/imagen/aqa/tts-only
+      const supportsText = methods.includes('generateContent');
+      const isNonChat =
+        lowerId.includes('embedding') ||
+        lowerId.includes('aqa') ||
+        lowerId.includes('imagen') ||
+        lowerId.includes('veo');
+
+      if (id && supportsText && !isNonChat) {
+        const label = m.displayName ? `${m.displayName} (${id})` : id;
+        allModels.push({ id, name: label });
+      }
+    }
+
+    pageToken = data.nextPageToken || '';
+  } while (pageToken);
+
+  return allModels;
+}
+
+/**
+ * Fetches ALL live models available for this specific Groq API key!
+ */
+export async function fetchLiveGroqModels(apiKey: string): Promise<AIModelOption[]> {
   const cleanKey = apiKey.trim();
   if (!cleanKey) return [];
 
@@ -117,61 +181,81 @@ export async function fetchLiveGroqModels(apiKey: string): Promise<string[]> {
   }
 
   const data = await response.json();
-  const models = (data.data || [])
-    .map((m: any) => m.id)
-    .filter((id: string) => !id.toLowerCase().includes('whisper') && !id.toLowerCase().includes('audio'));
+  const rawModels = data.data || [];
 
-  return models;
+  // Sort text/chat models first, keep everything visible so user sees all models on their account
+  const mapped: AIModelOption[] = rawModels
+    .filter((m: any) => m.id)
+    .map((m: any) => {
+      const id = String(m.id);
+      const lower = id.toLowerCase();
+      let suffix = '';
+      if (lower.includes('whisper')) suffix = ' [Audio/STT]';
+      else if (lower.includes('orpheus') || lower.includes('tts')) suffix = ' [TTS]';
+      else if (lower.includes('guard') || lower.includes('safety')) suffix = ' [Moderacja]';
+      const known = GROQ_MODELS.find((k) => k.id === id);
+      return {
+        id,
+        name: known ? known.name : `${id}${suffix}`,
+      };
+    })
+    .sort((a: AIModelOption, b: AIModelOption) => {
+      const aAudio = a.name.includes('[Audio') || a.name.includes('[TTS') || a.name.includes('[Moderacja') ? 1 : 0;
+      const bAudio = b.name.includes('[Audio') || b.name.includes('[TTS') || b.name.includes('[Moderacja') ? 1 : 0;
+      if (aAudio !== bAudio) return aAudio - bAudio;
+      return a.id.localeCompare(b.id);
+    });
+
+  return mapped;
 }
 
 /**
  * Builds high quality, viral prompt for school social media
  */
 function buildPrompt(holiday: Holiday, tone: AITone = 'humor'): string {
-  const otherHolidaysStr = holiday.allDayHolidays && holiday.allDayHolidays.length > 1
-    ? `\nW tym samym dniu przypadają także inne okazje: ${holiday.allDayHolidays.join(', ')}.`
-    : '';
+  const otherHolidaysStr =
+    holiday.allDayHolidays && holiday.allDayHolidays.length > 1
+      ? `\nW tym samym dniu przypadają także inne okazje: ${holiday.allDayHolidays.join(', ')}.`
+      : '';
 
-  const nameDaysStr = holiday.nameDays && holiday.nameDays.length > 0
-    ? `\nImieniny obchodzą: ${holiday.nameDays.join(', ')}.`
-    : '';
+  const nameDaysStr =
+    holiday.nameDays && holiday.nameDays.length > 0
+      ? `\nImieniny obchodzą: ${holiday.nameDays.join(', ')}.`
+      : '';
 
   let styleDesc = '';
   switch (tone) {
     case 'interview':
-      styleDesc = 'KIERUNEK: Sonda na szkolnym korytarzu! Wywiady z zaskoczenia podczas przerwy, rekwizyt jako mikrofon (np. linijka, banan, marker tablicowy), szybkie, cięte i komiczne wypowiedzi uczniów i nauczycieli.';
+      styleDesc =
+        'KIERUNEK: Sonda na szkolnym korytarzu! Wywiady z zaskoczenia podczas przerwy, rekwizyt jako mikrofon (np. linijka, banan, marker tablicowy), szybkie, cięte i komiczne wypowiedzi uczniów i nauczycieli.';
       break;
     case 'pov':
-      styleDesc = 'KIERUNEK: Filmowy POV / Roleplay! Dramatyczny mini-skecz aktorski (np. uczeń vs nauczyciel, przewodniczący Samorządu Uczniowskiego niczym w filmie akcji lub dramacie mafijnym, zwolnione tempo, zbliżenia).';
+      styleDesc =
+        'KIERUNEK: Filmowy POV / Roleplay! Dramatyczny mini-skecz aktorski (np. uczeń vs nauczyciel, przewodniczący Samorządu Uczniowskiego niczym w filmie akcji lub dramacie mafijnym, zwolnione tempo, zbliżenia).';
       break;
     case 'official':
-      styleDesc = 'KIERUNEK: Akcja Samorządu Uczniowskiego & Integracja! Kulturalne, ale energiczne i wesołe świętowanie, wyzwanie dla klas na korytarzu, apel Samorządu, zaangażowanie dyrekcji i grona pedagogicznego.';
+      styleDesc =
+        'KIERUNEK: Akcja Samorządu Uczniowskiego & Integracja! Kulturalne, ale energiczne i wesołe świętowanie, wyzwanie dla klas na korytarzu, apel Samorządu, zaangażowanie dyrekcji i grona pedagogicznego.';
       break;
     case 'humor':
     default:
-      styleDesc = 'KIERUNEK: Viralowy szkolny humor & Rel! Memy, zderzenie powagi święta ze szkolną codziennością (sprawdziany, kartkówki, dzwonek na przerwę, kolejka w sklepiku), autentyczny młodzieżowy klimat bez cringeu.';
+      styleDesc =
+        'KIERUNEK: Viralowy szkolny humor & Rel! Memy, zderzenie powagi święta ze szkolną codziennością (sprawdziany, kartkówki, dzwonek na przerwę, kolejka w sklepiku), autentyczny młodzieżowy klimat bez cringeu.';
       break;
   }
 
-  return `Jesteś wybitnym twórcą virali na TikToka/Reels (miliony wyświetleń) oraz kreatywnym opiekunem mediów Samorządu Uczniowskiego w polskiej szkole.
-Twoim celem jest przygotować kompletny, porywający, pełen humoru pakiet materiałów na święto:
+  return `Jesteś wybitnym twórcą virali na TikToka/Reels oraz kreatywnym opiekunem mediów Samorządu Uczniowskiego w polskiej szkole.
+Twoim celem jest przygotować KOMPLETNY, PEŁNY pakiet materiałów (zarówno sekcję TIKTOK jak i sekcję FACEBOOK — nie przerywaj w połowie!) na święto:
 - Święto: "${holiday.name}"
 - Data: ${holiday.day}.${holiday.month < 10 ? '0' + holiday.month : holiday.month}
 - Kategoria: ${holiday.category}
 - Opis święta: "${holiday.description}"${otherHolidaysStr}${nameDaysStr}
 - ${styleDesc}
 
-ŻELAZNE ZASADY KREATYWNE:
-1. DLA ŚWIĄT NIETYPOWYCH/KONTROWERSYJNYCH (np. związanych z alkoholem, toaletami itp.): ZAWSZE twórz bezpieczną, genialną szkolną adaptację (np. zamiast taniego wina -> degustacja najtańszego soku jabłkowego z dyskontu lub herbaty ze sklepiku w papierowym kubeczku w stylu snobistycznego sommeliera; zamiast toalet -> recenzja szkolnych korytarzy i luster jak w hotelu 5-gwiazdkowym).
-2. ŻADNYCH OGÓLNIKÓW! Pokaż konkretne postacie i dialogi: przewodniczący Samorządu, uczeń z 3B, nauczyciel chemii/WF/matematyki.
-3. SCENARIUSZ TIKTOKA: musi być pełny, podzielony na sekwencje sekundowe:
-   - 1. (0-3s) Visual Hook & Pierwsze słowa
-   - 2. (3-8s) Rozwinięcie akcji
-   - 3. (8-15s) Zwrot akcji / wejście nauczyciela
-   - 4. (15-25s) Zaskakująca puenta i wezwanie do akcji
-4. POST NA FACEBOOKA: musi być gotowy do publikacji na fanpage szkoły. Nie nudny referat, lecz ciepły, żywy tekst z emotkami i zintegrowany z wyzwaniem/pytaniem w komentarzach.
-
-Zwróć odpowiedź DOKŁADNIE w poniższym formacie z tymi nagłówkami (nie zmieniaj ich nazw ani nie dodawaj gwiazdek do etykiet):
+ZASADY:
+1. Dla świąt nietypowych/kontrowersyjnych (np. alkohol, toalety) zawsze twórz bezpieczną szkolną adaptację (np. sok jabłkowy zamiast wina, recenzja luster na korytarzu jak w hotelu).
+2. Pokaż konkretne postacie i dialogi: przewodniczący Samorządu, uczeń z 3B, nauczyciel chemii/WF/matematyki.
+3. Wypełnij WSZYSTKIE pola poniżej dokładnie pod tymi etykietami (każda etykieta w nowej linii, bez żadnych bloków <think>):
 
 === TIKTOK ===
 TYTUŁ: [Chwytliwy, krótki tytuł filmu]
@@ -183,10 +267,10 @@ SCENARIUSZ:
 4. (15-25s) [Puenta i finał]
 DŹWIĘK: [Konkretna muzyka, trend audio z TikToka lub styl podkładu]
 OPIS: [Gotowy opis do wklejenia pod filmem z humorem]
-HASHTAGI: [Najlepsze hashtagi z #]
+HASHTAGI: [Hashtagi z #]
 
 === FACEBOOK ===
-TYTUŁ: [Chwytliwy nagłówek posta z emotkami]
+TYTUŁ: [Chwytliwy nagłówek posta]
 TREŚĆ:
 [Pełny post na fanpage szkoły - 2-3 estetyczne akapity z humorem i szkolnym duchem]
 CTA: [Chwytliwe pytanie do komentarza lub zadanie/wyzwanie dla uczniów]
@@ -209,7 +293,7 @@ export function cleanText(t: string, keepHashtags = false): string {
 }
 
 /**
- * Cleans multiline text (removes standalone asterisks lines and leading asterisks)
+ * Cleans multiline text
  */
 export function cleanMultiLine(text: string): string {
   if (!text) return '';
@@ -223,66 +307,192 @@ export function cleanMultiLine(text: string): string {
 }
 
 /**
- * Calls Gemini API
+ * Strips <think>...</think> reasoning blocks if a model emits them inline
  */
-async function callGemini(apiKey: string, model: string, prompt: string): Promise<string> {
-  const cleanModel = model || 'gemini-2.5-flash';
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${cleanModel}:generateContent?key=${apiKey.trim()}`;
+function stripThinkingTags(raw: string): string {
+  return raw
+    .replace(/<think>[\s\S]*?<\/think>/gi, '')
+    .replace(/<thinking>[\s\S]*?<\/thinking>/gi, '')
+    .trim();
+}
 
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      contents: [
-        {
-          parts: [{ text: prompt }],
-        },
-      ],
-      generationConfig: {
-        temperature: 0.8,
-        maxOutputTokens: 2500,
-      },
-    }),
-  });
-
-  if (!response.ok) {
-    let errorDetail = '';
-    try {
-      const errJson = await response.json();
-      errorDetail = errJson.error?.message || response.statusText;
-    } catch {
-      errorDetail = response.statusText;
-    }
-    throw new Error(`Błąd Gemini API (${response.status}): ${errorDetail}`);
-  }
-
-  const data = await response.json();
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) {
-    throw new Error('Gemini API zwróciło pustą odpowiedź.');
-  }
-
-  return text;
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /**
- * Calls Groq API with automatic model retry / fallback
+ * Calls Gemini API with automatic fallback across modern Gemini models
+ * (handles 404/403/400 unavailable models as well as 503 high-demand & 429 per-model spikes)
  */
-async function callGroq(apiKey: string, requestedModel: string, prompt: string): Promise<{ text: string; usedModel: string }> {
+async function callGemini(
+  apiKey: string,
+  requestedModel: string,
+  prompt: string,
+  maxTokens = 8192
+): Promise<{ text: string; usedModel: string }> {
+  const cleanKey = apiKey.trim();
+
+  const candidateModels = [
+    requestedModel,
+    'gemini-3.5-flash-lite',
+    'gemini-3.8-flash',
+    'gemini-3.6-flash',
+    'gemini-3.1-flash-lite',
+    'gemini-3-flash-preview',
+    'gemini-4-argon',
+    'gemini-2.5-flash',
+    'gemini-2.5-flash-lite',
+  ].filter((m, i, arr) => m && arr.indexOf(m) === i);
+
+  let lastError = '';
+  let sawHighDemand = false;
+
+  for (let idx = 0; idx < candidateModels.length; idx++) {
+    const modelToTry = candidateModels[idx];
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
+      modelToTry
+    )}:generateContent?key=${encodeURIComponent(cleanKey)}`;
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [{ text: prompt }],
+            },
+          ],
+          generationConfig: {
+            temperature: 0.8,
+            maxOutputTokens: maxTokens,
+          },
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const candidate = data.candidates?.[0];
+        const parts: any[] = candidate?.content?.parts || [];
+
+        // Exclude internal thought parts if present, join all real answer parts
+        const answerParts = parts.filter((p) => !p.thought && typeof p.text === 'string');
+        let text = answerParts.map((p) => p.text).join('\n').trim();
+
+        if (!text) {
+          text = parts
+            .filter((p) => typeof p.text === 'string')
+            .map((p) => p.text)
+            .join('\n')
+            .trim();
+        }
+
+        if (!text) {
+          const blockReason = data.promptFeedback?.blockReason || candidate?.finishReason;
+          throw new Error(
+            `Gemini API zwróciło pustą odpowiedź (powód: ${blockReason || 'nieznany'}). Spróbuj innego modelu lub tonu.`
+          );
+        }
+
+        return { text, usedModel: modelToTry };
+      }
+
+      let errorDetail = '';
+      try {
+        const errJson = await response.json();
+        errorDetail = errJson.error?.message || response.statusText;
+      } catch {
+        errorDetail = response.statusText;
+      }
+
+      lastError = `(${response.status}): ${errorDetail}`;
+
+      // Do not retry other models if the API key itself is invalid
+      const isKeyInvalid =
+        response.status === 401 ||
+        errorDetail.toLowerCase().includes('api key not valid') ||
+        errorDetail.toLowerCase().includes('api_key_invalid');
+
+      if (isKeyInvalid) {
+        throw new Error(`Błąd klucza Gemini API ${lastError}`);
+      }
+
+      const lowerDetail = errorDetail.toLowerCase();
+      const isTransientOverload =
+        response.status === 503 ||
+        response.status === 429 ||
+        response.status === 500 ||
+        response.status === 502 ||
+        response.status === 504 ||
+        lowerDetail.includes('high demand') ||
+        lowerDetail.includes('overloaded') ||
+        lowerDetail.includes('unavailable') ||
+        lowerDetail.includes('try again');
+
+      if (isTransientOverload) {
+        sawHighDemand = true;
+      }
+
+      // Retry next candidate on model availability errors OR per-model transient spikes (503/429/5xx)
+      const shouldRetryNextModel =
+        isTransientOverload ||
+        response.status === 404 ||
+        response.status === 400 ||
+        response.status === 403 ||
+        lowerDetail.includes('not found') ||
+        lowerDetail.includes('not supported') ||
+        lowerDetail.includes('does not exist') ||
+        lowerDetail.includes('access');
+
+      if (!shouldRetryNextModel) {
+        throw new Error(`Błąd Gemini API ${lastError}`);
+      }
+
+      if (isTransientOverload && idx < candidateModels.length - 1) {
+        await delay(300);
+      }
+    } catch (err: any) {
+      if (
+        err.message?.includes('Błąd klucza Gemini API') ||
+        err.message?.includes('Gemini API zwróciło pustą odpowiedź') ||
+        err.message?.startsWith('Błąd Gemini API ')
+      ) {
+        throw err;
+      }
+      lastError = err.message || 'Nieznany błąd sieci';
+    }
+  }
+
+  if (sawHighDemand) {
+    throw new Error(
+      `Serwery Gemini są chwilowo przeciążone (503/429). Przetestowaliśmy zapasowe modele, ale żaden nie był teraz wolny. Odczekaj kilka sekund i kliknij ponownie, lub przełącz dostawcę na Groq. Ostatni komunikat: ${lastError}`
+    );
+  }
+
+  throw new Error(
+    `Błąd Gemini API: Żaden z modeli nie odpowiedział (${lastError}). Kliknij „Wczytaj modele z konta” w ustawieniach.`
+  );
+}
+
+/**
+ * Calls Groq API with automatic model retry / fallback & token limit handling
+ */
+async function callGroq(
+  apiKey: string,
+  requestedModel: string,
+  prompt: string,
+  maxTokens = 8192
+): Promise<{ text: string; usedModel: string }> {
   const url = 'https://api.groq.com/openai/v1/chat/completions';
   const cleanKey = apiKey.trim();
 
-  // Primary model and list of backup candidates if 404 occurs
   const candidateModels = [
     requestedModel,
     'openai/gpt-oss-120b',
-    'gpt-oss-120b',
     'openai/gpt-oss-20b',
-    'gpt-oss-20b',
     'qwen/qwen3.8-27b',
-    'qwen-3.8-27b',
     'llama-3.3-70b-versatile',
     'llama-3.1-8b-instant',
   ].filter((m, i, arr) => m && arr.indexOf(m) === i);
@@ -290,77 +500,104 @@ async function callGroq(apiKey: string, requestedModel: string, prompt: string):
   let lastError = '';
 
   for (const modelToTry of candidateModels) {
-    try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${cleanKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: modelToTry,
-          messages: [
-            {
-              role: 'system',
-              content:
-                'Jesteś czołowym reżyserem virali na TikToka/Reels (ponad 100M wyświetleń) oraz kreatywnym liderem Samorządu Uczniowskiego w polskiej szkole. Specjalizujesz się w tworzeniu genialnych, szalenie zabawnych, autentycznych treści dla uczniów i nauczycieli. Tworzysz pełne, wyczerpujące odpowiedzi z kompletnymi scenariuszami krok po kroku (nigdy nie ucinasz tekstu!).',
-            },
-            {
-              role: 'user',
-              content: prompt,
-            },
-          ],
-          temperature: 0.8,
-          max_tokens: 2500,
-        }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        const text = data.choices?.[0]?.message?.content;
-        if (text) {
-          return { text, usedModel: modelToTry };
-        }
-      }
-
-      // If failed, extract error message
-      let errorMsg = response.statusText;
+    for (const tokenLimit of [maxTokens, 4096]) {
       try {
-        const errJson = await response.json();
-        errorMsg = errJson.error?.message || response.statusText;
-      } catch {
-        // ignore
-      }
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${cleanKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: modelToTry,
+            messages: [
+              {
+                role: 'system',
+                content:
+                  'Jesteś czołowym reżyserem virali na TikToka/Reels oraz kreatywnym liderem Samorządu Uczniowskiego w polskiej szkole. Zawsze zwracasz KOMPLETNĄ odpowiedź zawierającą obie sekcje (=== TIKTOK === oraz === FACEBOOK ===) w wymaganym formacie, nigdy nie urywając tekstu w połowie.',
+              },
+              {
+                role: 'user',
+                content: prompt,
+              },
+            ],
+            temperature: 0.8,
+            max_tokens: tokenLimit,
+          }),
+        });
 
-      lastError = `(${response.status}): ${errorMsg}`;
+        if (response.ok) {
+          const data = await response.json();
+          const msg = data.choices?.[0]?.message;
+          const text = msg?.content || '';
+          if (text.trim()) {
+            return { text: stripThinkingTags(text), usedModel: modelToTry };
+          }
+        }
 
-      // If it's not a 404 model not found error, don't try other models (e.g. invalid API key 401)
-      if (response.status !== 404 && response.status !== 400) {
+        let errorMsg = response.statusText;
+        try {
+          const errJson = await response.json();
+          errorMsg = errJson.error?.message || response.statusText;
+        } catch {
+          // ignore
+        }
+
+        lastError = `(${response.status}): ${errorMsg}`;
+
+        if (response.status === 401) {
+          throw new Error(`Błąd klucza Groq API ${lastError}`);
+        }
+
+        // If 400 was specifically about max_tokens too large, try next smaller tokenLimit
+        if (response.status === 400 && errorMsg.toLowerCase().includes('max_tokens') && tokenLimit > 4096) {
+          continue;
+        }
+
+        // Otherwise break inner token loop and try next model on availability or transient overload errors
+        if (
+          response.status === 404 ||
+          response.status === 400 ||
+          response.status === 403 ||
+          response.status === 429 ||
+          response.status === 503 ||
+          response.status === 500 ||
+          response.status === 502 ||
+          response.status === 504
+        ) {
+          if (response.status === 503 || response.status === 429) {
+            await delay(300);
+          }
+          break;
+        }
+
         throw new Error(`Błąd Groq API ${lastError}`);
+      } catch (err: any) {
+        if (err.message?.includes('401') || err.message?.includes('Błąd Groq API')) {
+          throw err;
+        }
+        lastError = err.message || 'Nieznany błąd sieci';
+        break;
       }
-    } catch (err: any) {
-      if (!err.message?.includes('404') && !err.message?.includes('does not exist')) {
-        throw err;
-      }
-      lastError = err.message;
     }
   }
 
   throw new Error(
-    `Błąd Groq API: Żaden z modeli nie zadziałał. Ostatni błąd: ${lastError}. Kliknij 'Pobierz modele z konta', aby wczytać aktualne modele z Twojego konta Groq.`
+    `Błąd Groq API: Żaden z modeli nie zadziałał. Ostatni błąd: ${lastError}. Kliknij „Wczytaj modele z konta” w ustawieniach.`
   );
 }
 
 /**
  * Robust line-by-line state machine parser for generated content.
- * Prevents regex collisions with words like "opis", "dźwięk", "treść" inside the script!
  */
 export function parseGeneratedText(
-  raw: string,
+  rawInput: string,
   provider: AIProvider,
   model: string,
   tone?: AITone
 ): AIGenerationResult {
+  const raw = stripThinkingTags(rawInput || '');
+
   const result: AIGenerationResult = {
     tikTokIdea: {
       title: '',
@@ -437,53 +674,57 @@ export function parseGeneratedText(
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     const trimmed = line.trim();
+    // Strip markdown hashes, bold stars, emojis, bullets at the start for header inspection
+    const normalized = trimmed
+      .replace(/^[\s#*=->\d.)]+/, '')
+      .replace(/[^\p{L}\p{N}\s:_-]/gu, '')
+      .trim();
 
-    // Check for major section headers
-    if (
-      /^={2,}\s*FACEBOOK/i.test(trimmed) ||
-      /^#{1,3}\s*FACEBOOK/i.test(trimmed) ||
-      /^\*{2,}\s*FACEBOOK/i.test(trimmed)
-    ) {
+    if (/^=*\s*(?:POST NA\s+)?FACEBOOK\s*=*$/i.test(normalized) || /^===+\s*FACEBOOK/i.test(trimmed)) {
       flush();
       inFacebookSection = true;
       continue;
     }
-    if (
-      /^={2,}\s*TIKTOK/i.test(trimmed) ||
-      /^#{1,3}\s*TIKTOK/i.test(trimmed) ||
-      /^\*{2,}\s*TIKTOK/i.test(trimmed)
-    ) {
+    if (/^=*\s*(?:POMYSŁ NA\s+)?TIKTOK\s*=*$/i.test(normalized) || /^===+\s*TIKTOK/i.test(trimmed)) {
       flush();
       inFacebookSection = false;
       continue;
     }
 
-    // Check for field markers at the start of a line
-    // e.g. "TYTUŁ: ...", "**TYTUŁ:** ...", "### TYTUŁ: ...", "HOOK: ...", "SCENARIUSZ:"
-    const headerMatch = trimmed.match(
-      /^(?:#{1,4}|\*{1,3}|-)?\s*(?:(?:TIKTOK|FB)_)?(TYTUŁ|TYTUL|HOOK|SCENARIUSZ|DŹWIĘK|DZWIEK|AUDIO|MUZYKA|OPIS(?!\s*(?:SCENY|AKCJI|UJĘCIA|POSTACI))|CAPTION|HASHTAGI?|TAGI|TREŚĆ|TRESC|POST|CTA|WEZWANIE|WYZWANIE)\s*(?:\*{1,3})?\s*:\s*(.*)$/i
+    // Match field headers robustly even with emojis, numbering, bolding, or extra descriptor words before ':'
+    const cleanForColon = trimmed
+      .replace(/^[\s#*->\d.)]+/, '')
+      .replace(/^[^\p{L}]+/u, ''); // remove leading emojis
+
+    const headerMatch = cleanForColon.match(
+      /^(?:\*{1,3})?(?:(?:TIKTOK|FB)[\s_]+)?(TYTUŁ|TYTUL|HOOK[^:]{0,20}|SCENARIUSZ[^:]{0,20}|DŹWIĘK[^:]{0,20}|DZWIEK[^:]{0,20}|AUDIO[^:]{0,20}|MUZYKA[^:]{0,20}|OPIS(?!\s*(?:SCENY|AKCJI|UJĘCIA|POSTACI))[^:]{0,20}|CAPTION[^:]{0,15}|HASHTAG[IY]?[^:]{0,15}|TAGI|TREŚĆ[^:]{0,20}|TRESC[^:]{0,20}|POST(?:\s+NA\s+FB)?|CTA[^:]{0,25}|WEZWANIE[^:]{0,25}|WYZWANIE[^:]{0,25})(?:\*{1,3})?\s*:\s*(.*)$/i
     );
 
     if (headerMatch) {
       flush();
       const rawKey = headerMatch[1].toUpperCase();
-      const inlineContent = headerMatch[2].trim();
+      const inlineContent = headerMatch[2].replace(/^\*{1,3}\s*/, '').trim();
 
-      if (rawKey.startsWith('TYTU') || rawKey.startsWith('TITLE')) {
+      if (rawKey.startsWith('TYTU')) {
         currentTarget = inFacebookSection ? 'FB_TITLE' : 'TIKTOK_TITLE';
-      } else if (rawKey === 'HOOK') {
+      } else if (rawKey.startsWith('HOOK')) {
         currentTarget = 'TIKTOK_HOOK';
-      } else if (rawKey === 'SCENARIUSZ' || rawKey === 'SCRIPT') {
+      } else if (rawKey.startsWith('SCENARIUSZ')) {
         currentTarget = 'TIKTOK_SCRIPT';
-      } else if (rawKey.includes('DZW') || rawKey.includes('DŹW') || rawKey === 'AUDIO' || rawKey === 'MUZYKA') {
+      } else if (
+        rawKey.startsWith('DŹW') ||
+        rawKey.startsWith('DZW') ||
+        rawKey.startsWith('AUDIO') ||
+        rawKey.startsWith('MUZYK')
+      ) {
         currentTarget = 'TIKTOK_AUDIO';
-      } else if (rawKey.startsWith('OPIS') || rawKey === 'CAPTION') {
+      } else if (rawKey.startsWith('OPIS') || rawKey.startsWith('CAPTION')) {
         currentTarget = 'TIKTOK_CAPTION';
       } else if (rawKey.startsWith('HASHTAG') || rawKey === 'TAGI') {
         currentTarget = inFacebookSection ? 'FB_HASHTAGS' : 'TIKTOK_HASHTAGS';
-      } else if (rawKey.startsWith('TRE') || rawKey === 'POST' || rawKey === 'CONTENT') {
+      } else if (rawKey.startsWith('TRE') || rawKey.startsWith('POST')) {
         currentTarget = 'FB_CONTENT';
-      } else if (rawKey === 'CTA' || rawKey === 'WEZWANIE' || rawKey === 'WYZWANIE') {
+      } else if (rawKey.startsWith('CTA') || rawKey.startsWith('WEZWAN') || rawKey.startsWith('WYZWA')) {
         currentTarget = 'FB_CTA';
       }
 
@@ -493,7 +734,6 @@ export function parseGeneratedText(
       continue;
     }
 
-    // Accumulate regular content line
     if (currentTarget) {
       if (/^[\s*#-]{2,}$/.test(trimmed)) continue;
       buffer.push(line);
@@ -502,30 +742,31 @@ export function parseGeneratedText(
 
   flush();
 
-  // Robust fallbacks if any field was omitted
-  if (!result.tikTokIdea.title) result.tikTokIdea.title = 'Viralowy pomysł na TikToka';
-  if (!result.tikTokIdea.hook) result.tikTokIdea.hook = 'POV: Kiedy w szkole jest to święto...';
+  // Robust fallbacks if any field was omitted or formatted unconventionally
+  if (!result.tikTokIdea.title) result.tikTokIdea.title = 'Pomysł na TikToka';
+  if (!result.tikTokIdea.hook) result.tikTokIdea.hook = 'Zobacz pełny scenariusz poniżej';
   if (!result.tikTokIdea.script) {
     const rawTikTok = raw.split(/={2,}\s*FACEBOOK/i)[0];
     result.tikTokIdea.script = cleanMultiLine(rawTikTok);
   }
   if (!result.tikTokIdea.audioTrend) {
-    result.tikTokIdea.audioTrend = 'Popularny trend na TikToku / dynamiczna muzyka szkolna';
+    result.tikTokIdea.audioTrend = 'Popularny trend dźwiękowy na TikToku';
   }
   if (!result.tikTokIdea.hashtags) {
-    result.tikTokIdea.hashtags = '#szkoła #dlaciebie #dc #viral #uczniowie';
+    result.tikTokIdea.hashtags = '#szkoła #dlaciebie #dc #viral #festivo';
   }
 
-  if (!result.facebookPost.title) result.facebookPost.title = 'Dziś w naszej szkole!';
+  if (!result.facebookPost.title) result.facebookPost.title = 'Post na szkolnego Facebooka';
   if (!result.facebookPost.content) {
-    const fbPart = raw.split(/={2,}\s*FACEBOOK/i)[1];
-    result.facebookPost.content = fbPart ? cleanMultiLine(fbPart) : cleanMultiLine(raw);
+    const fbSplit = raw.split(/={2,}\s*FACEBOOK|\bFACEBOOK\b\s*[:=]?/i);
+    result.facebookPost.content =
+      fbSplit.length > 1 ? cleanMultiLine(fbSplit.slice(1).join('\n')) : cleanMultiLine(raw);
   }
   if (!result.facebookPost.callToAction) {
-    result.facebookPost.callToAction = 'A jak Wy świętujecie dzisiejszy dzień? Dajcie znać w komentarzach! 👇';
+    result.facebookPost.callToAction = 'Dajcie znać w komentarzach, jak świętujecie ten dzień!';
   }
   if (!result.facebookPost.hashtags) {
-    result.facebookPost.hashtags = '#Szkoła #SamorządUczniowski #Uczniowie #SzkolneŻycie';
+    result.facebookPost.hashtags = '#Szkoła #SamorządUczniowski #Festivo';
   }
 
   return result;
@@ -549,18 +790,23 @@ export async function generateHolidaySocialIdeas(
     if (!settings.geminiApiKey || settings.geminiApiKey.trim().length === 0) {
       throw new Error('Brak klucza API Gemini! Dodaj swój bezpłatny klucz w Ustawieniach AI.');
     }
-    activeModel = settings.geminiModel || 'gemini-2.5-flash';
-    rawOutput = await callGemini(settings.geminiApiKey, activeModel, prompt);
+    const requested = settings.geminiModel || 'gemini-3.8-flash';
+    const geminiRes = await callGemini(settings.geminiApiKey, requested, prompt, 8192);
+    rawOutput = geminiRes.text;
+    activeModel = geminiRes.usedModel;
+
+    if (activeModel !== requested) {
+      saveAISettings({ ...settings, geminiModel: activeModel });
+    }
   } else if (provider === 'groq') {
     if (!settings.groqApiKey || settings.groqApiKey.trim().length === 0) {
       throw new Error('Brak klucza API Groq! Dodaj swój bezpłatny klucz w Ustawieniach AI.');
     }
     const requested = settings.groqModel || 'openai/gpt-oss-120b';
-    const groqRes = await callGroq(settings.groqApiKey, requested, prompt);
+    const groqRes = await callGroq(settings.groqApiKey, requested, prompt, 8192);
     rawOutput = groqRes.text;
     activeModel = groqRes.usedModel;
 
-    // If a fallback model was used, update setting so future requests use it
     if (activeModel !== requested) {
       saveAISettings({ ...settings, groqModel: activeModel });
     }
@@ -574,15 +820,25 @@ export async function generateHolidaySocialIdeas(
 /**
  * Tests connection with the given API key
  */
-export async function testAIConnection(provider: AIProvider, apiKey: string, model: string): Promise<string> {
-  const testPrompt = 'Napisz krótko: "Połączenie działa prawidłowo!"';
+export async function testAIConnection(
+  provider: AIProvider,
+  apiKey: string,
+  model: string
+): Promise<{ detail: string; usedModel: string }> {
+  const testPrompt = 'Napisz dokładnie dwa słowa: "Połączenie działa"';
   if (provider === 'gemini') {
-    const res = await callGemini(apiKey, model || 'gemini-2.5-flash', testPrompt);
-    return res;
+    const res = await callGemini(apiKey, model || 'gemini-3.8-flash', testPrompt, 1024);
+    return {
+      detail: `Użyty model: ${res.usedModel} (${res.text})`,
+      usedModel: res.usedModel,
+    };
   }
   if (provider === 'groq') {
-    const res = await callGroq(apiKey, model || 'openai/gpt-oss-120b', testPrompt);
-    return `Użyty model: ${res.usedModel}`;
+    const res = await callGroq(apiKey, model || 'openai/gpt-oss-120b', testPrompt, 1024);
+    return {
+      detail: `Użyty model: ${res.usedModel} (${res.text})`,
+      usedModel: res.usedModel,
+    };
   }
-  return 'OK';
+  return { detail: 'OK', usedModel: model };
 }

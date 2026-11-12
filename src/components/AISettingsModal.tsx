@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { Bot, Check, ExternalLink, Eye, EyeOff, Key, Loader2, RefreshCw, Sparkles, X, Zap } from 'lucide-react';
+import { Bot, Check, ExternalLink, Eye, EyeOff, Key, Loader2, RefreshCw, X } from 'lucide-react';
 import {
+  AIModelOption,
   AISettings,
   GEMINI_MODELS,
   GROQ_MODELS,
+  fetchLiveGeminiModels,
   fetchLiveGroqModels,
   getAISettings,
   saveAISettings,
@@ -22,27 +24,71 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
   onClose,
   onSaved,
 }) => {
-  if (!isOpen) return null;
-
   const [settings, setSettings] = useState<AISettings>(getAISettings);
   const [showGeminiKey, setShowGeminiKey] = useState(false);
   const [showGroqKey, setShowGroqKey] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
 
-  // Live models fetched from Groq API
-  const [fetchedGroqModels, setFetchedGroqModels] = useState<string[]>([]);
-  const [isFetchingModels, setIsFetchingModels] = useState(false);
-  const [customModelMode, setCustomModelMode] = useState(false);
+  // Live models fetched from API
+  const [fetchedGeminiModels, setFetchedGeminiModels] = useState<AIModelOption[]>([]);
+  const [isFetchingGeminiModels, setIsFetchingGeminiModels] = useState(false);
+  const [customGeminiMode, setCustomGeminiMode] = useState(false);
 
-  useEffect(() => {
-    if (settings.groqApiKey && settings.groqApiKey.trim().length > 10) {
-      handleFetchGroqModels(false);
+  const [fetchedGroqModels, setFetchedGroqModels] = useState<AIModelOption[]>([]);
+  const [isFetchingGroqModels, setIsFetchingGroqModels] = useState(false);
+  const [customGroqMode, setCustomGroqMode] = useState(false);
+
+  const handleFetchGeminiModels = async (keyOverride?: string, showFeedback: boolean = true) => {
+    const apiKey = (keyOverride ?? settings.geminiApiKey).trim();
+    if (apiKey.length < 10) {
+      if (showFeedback) {
+        setTestResult({
+          success: false,
+          message: 'Najpierw wklej klucz API Google Gemini, aby pobrać listę modeli.',
+        });
+      }
+      return;
     }
-  }, []);
 
-  const handleFetchGroqModels = async (showFeedback: boolean = true) => {
-    if (!settings.groqApiKey || settings.groqApiKey.trim().length < 5) {
+    setIsFetchingGeminiModels(true);
+    try {
+      const models = await fetchLiveGeminiModels(apiKey);
+      if (models.length > 0) {
+        setFetchedGeminiModels(models);
+        setSettings((prev) => {
+          const exists = models.some((m) => m.id === prev.geminiModel);
+          if (exists) return prev;
+          const preferred =
+            models.find((m) => m.id === 'gemini-3.8-flash') ||
+            models.find((m) => m.id === 'gemini-3.5-flash-lite') ||
+            models.find((m) => m.id.includes('flash')) ||
+            models[0];
+          return { ...prev, geminiModel: preferred.id };
+        });
+
+        if (showFeedback) {
+          setTestResult({
+            success: true,
+            message: `Pobrano wszystkie aktywne modele Gemini (${models.length}) z Twojego konta!`,
+          });
+        }
+      }
+    } catch (err: any) {
+      if (showFeedback) {
+        setTestResult({
+          success: false,
+          message: err.message || 'Nie udało się pobrać listy modeli Gemini.',
+        });
+      }
+    } finally {
+      setIsFetchingGeminiModels(false);
+    }
+  };
+
+  const handleFetchGroqModels = async (keyOverride?: string, showFeedback: boolean = true) => {
+    const apiKey = (keyOverride ?? settings.groqApiKey).trim();
+    if (apiKey.length < 10) {
       if (showFeedback) {
         setTestResult({
           success: false,
@@ -52,21 +98,24 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
       return;
     }
 
-    setIsFetchingModels(true);
+    setIsFetchingGroqModels(true);
     try {
-      const models = await fetchLiveGroqModels(settings.groqApiKey);
+      const models = await fetchLiveGroqModels(apiKey);
       if (models.length > 0) {
         setFetchedGroqModels(models);
-        if (!models.includes(settings.groqModel)) {
+        setSettings((prev) => {
+          const exists = models.some((m) => m.id === prev.groqModel);
+          if (exists) return prev;
           const preferred =
-            models.find((m) => m.includes('120b') || m.includes('gpt-oss') || m.includes('qwen') || m.includes('70b')) ||
+            models.find((m) => m.id.includes('gpt-oss-120b') || m.id.includes('qwen') || m.id.includes('llama-3.3')) ||
             models[0];
-          setSettings((s) => ({ ...s, groqModel: preferred }));
-        }
+          return { ...prev, groqModel: preferred.id };
+        });
+
         if (showFeedback) {
           setTestResult({
             success: true,
-            message: `Wczytano ${models.length} aktywnych modeli z Twojego konta Groq! Wybrano model: ${settings.groqModel}`,
+            message: `Pobrano wszystkie aktywne modele Groq (${models.length}) z Twojego konta!`,
           });
         }
       }
@@ -74,13 +123,31 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
       if (showFeedback) {
         setTestResult({
           success: false,
-          message: `Nie udało się wczytać listy modeli: ${err.message}`,
+          message: err.message || 'Nie udało się wczytać listy modeli Groq.',
         });
       }
     } finally {
-      setIsFetchingModels(false);
+      setIsFetchingGroqModels(false);
     }
   };
+
+  // Sync settings and load live models every time the modal opens
+  useEffect(() => {
+    if (!isOpen) return;
+    const latest = getAISettings();
+    setSettings(latest);
+    setTestResult(null);
+
+    if (latest.geminiApiKey && latest.geminiApiKey.trim().length > 20) {
+      handleFetchGeminiModels(latest.geminiApiKey, false);
+    }
+    if (latest.groqApiKey && latest.groqApiKey.trim().length > 20) {
+      handleFetchGroqModels(latest.groqApiKey, false);
+    }
+  }, [isOpen]);
+
+  // Early return AFTER all hooks
+  if (!isOpen) return null;
 
   const handleSave = () => {
     triggerHaptic();
@@ -108,14 +175,28 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
     }
 
     try {
-      const detail = await testAIConnection(settings.provider, key, model);
+      const { detail, usedModel } = await testAIConnection(settings.provider, key, model);
+      const switchedNotice =
+        usedModel && usedModel !== model
+          ? ` (Wybrany model ${model} był przeciążony — automatycznie przełączono na ${usedModel})`
+          : '';
+
+      if (usedModel && usedModel !== model) {
+        setSettings((prev) =>
+          isGemini ? { ...prev, geminiModel: usedModel } : { ...prev, groqModel: usedModel }
+        );
+      }
+
       setTestResult({
         success: true,
-        message: `Połączenie z ${settings.provider === 'gemini' ? 'Google Gemini' : 'Groq'} działa poprawnie! (${detail})`,
+        message: `Połączenie z ${isGemini ? 'Google Gemini' : 'Groq'} działa poprawnie! ${detail}${switchedNotice}`,
       });
 
-      if (settings.provider === 'groq') {
-        handleFetchGroqModels(false);
+      // Refresh live models automatically on successful connection
+      if (isGemini) {
+        handleFetchGeminiModels(key, false);
+      } else {
+        handleFetchGroqModels(key, false);
       }
     } catch (err: any) {
       setTestResult({
@@ -127,9 +208,24 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
     }
   };
 
-  const combinedGroqModels = Array.from(
-    new Set([...fetchedGroqModels, ...GROQ_MODELS.map((m) => m.id)])
-  );
+  // Merge live models with static fallbacks (live first so all account models appear)
+  const combinedGeminiModels: AIModelOption[] = [];
+  const seenGemini = new Set<string>();
+  for (const m of [...fetchedGeminiModels, ...GEMINI_MODELS]) {
+    if (!seenGemini.has(m.id)) {
+      seenGemini.add(m.id);
+      combinedGeminiModels.push(m);
+    }
+  }
+
+  const combinedGroqModels: AIModelOption[] = [];
+  const seenGroq = new Set<string>();
+  for (const m of [...fetchedGroqModels, ...GROQ_MODELS]) {
+    if (!seenGroq.has(m.id)) {
+      seenGroq.add(m.id);
+      combinedGroqModels.push(m);
+    }
+  }
 
   return (
     <div
@@ -200,7 +296,7 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
                   : 'text-[#BCC3C9] hover:text-white'
               }`}
             >
-              <span>Groq (Llama / Qwen)</span>
+              <span>Groq (GPT OSS / Qwen / Llama)</span>
             </button>
           </div>
         </div>
@@ -228,9 +324,13 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
               <input
                 type={showGeminiKey ? 'text' : 'password'}
                 value={settings.geminiApiKey}
-                onChange={(e) =>
-                  setSettings((s) => ({ ...s, geminiApiKey: e.target.value }))
-                }
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setSettings((s) => ({ ...s, geminiApiKey: val }));
+                  if (val.trim().length >= 35) {
+                    handleFetchGeminiModels(val, false);
+                  }
+                }}
                 placeholder="Wklej klucz (AIzaSy...)"
                 className="w-full pl-9 pr-10 py-2.5 rounded-xl bg-[#243235] border border-[#334346] text-xs text-white placeholder-slate-500 focus:outline-none focus:border-[#D97652] font-mono"
               />
@@ -243,24 +343,64 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
               </button>
             </div>
 
-            <div>
-              <label className="block text-[11px] font-semibold text-[#BCC3C9] mb-1">
-                Model Gemini:
+            <div className="flex items-center justify-between">
+              <label className="text-[11px] font-semibold text-[#BCC3C9]">
+                Model Gemini ({combinedGeminiModels.length} na liście):
               </label>
+              <button
+                type="button"
+                onClick={() => handleFetchGeminiModels(undefined, true)}
+                disabled={isFetchingGeminiModels}
+                className="text-[11px] text-[#F2AB91] hover:text-white flex items-center gap-1 font-semibold underline disabled:opacity-50"
+              >
+                {isFetchingGeminiModels ? (
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                ) : (
+                  <RefreshCw className="w-3 h-3" />
+                )}
+                <span>Wczytaj wszystkie modele</span>
+              </button>
+            </div>
+
+            {!customGeminiMode ? (
               <select
                 value={settings.geminiModel}
-                onChange={(e) =>
-                  setSettings((s) => ({ ...s, geminiModel: e.target.value }))
-                }
+                onChange={(e) => {
+                  if (e.target.value === '__custom__') {
+                    setCustomGeminiMode(true);
+                  } else {
+                    setSettings((s) => ({ ...s, geminiModel: e.target.value }));
+                  }
+                }}
                 className="w-full px-3 py-2 rounded-xl bg-[#243235] border border-[#334346] text-xs text-slate-200 focus:outline-none focus:border-[#D97652]"
               >
-                {GEMINI_MODELS.map((m) => (
+                {combinedGeminiModels.map((m) => (
                   <option key={m.id} value={m.id}>
                     {m.name}
                   </option>
                 ))}
+                <option value="__custom__">+ Wpisz własną nazwę modelu...</option>
               </select>
-            </div>
+            ) : (
+              <div className="flex gap-1.5">
+                <input
+                  type="text"
+                  value={settings.geminiModel}
+                  onChange={(e) =>
+                    setSettings((s) => ({ ...s, geminiModel: e.target.value }))
+                  }
+                  placeholder="np. gemini-3.8-flash lub gemini-4-argon"
+                  className="flex-1 px-3 py-2 rounded-xl bg-[#243235] border border-[#334346] text-xs text-white placeholder-slate-500 font-mono focus:outline-none focus:border-[#D97652]"
+                />
+                <button
+                  type="button"
+                  onClick={() => setCustomGeminiMode(false)}
+                  className="px-2.5 py-1 text-xs text-[#BCC3C9] hover:text-white bg-[#243235] border border-[#334346] rounded-xl"
+                >
+                  Lista
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -287,9 +427,13 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
               <input
                 type={showGroqKey ? 'text' : 'password'}
                 value={settings.groqApiKey}
-                onChange={(e) =>
-                  setSettings((s) => ({ ...s, groqApiKey: e.target.value }))
-                }
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setSettings((s) => ({ ...s, groqApiKey: val }));
+                  if (val.trim().length >= 35) {
+                    handleFetchGroqModels(val, false);
+                  }
+                }}
                 placeholder="Wklej klucz (gsk_...)"
                 className="w-full pl-9 pr-10 py-2.5 rounded-xl bg-[#243235] border border-[#334346] text-xs text-white placeholder-slate-500 focus:outline-none focus:border-[#D97652] font-mono"
               />
@@ -305,46 +449,43 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
             {/* Live Model Fetch button */}
             <div className="flex items-center justify-between">
               <label className="text-[11px] font-semibold text-[#BCC3C9]">
-                Model Groq:
+                Model Groq ({combinedGroqModels.length} na liście):
               </label>
               <button
                 type="button"
-                onClick={() => handleFetchGroqModels(true)}
-                disabled={isFetchingModels}
+                onClick={() => handleFetchGroqModels(undefined, true)}
+                disabled={isFetchingGroqModels}
                 className="text-[11px] text-[#F2AB91] hover:text-white flex items-center gap-1 font-semibold underline disabled:opacity-50"
               >
-                {isFetchingModels ? (
+                {isFetchingGroqModels ? (
                   <Loader2 className="w-3 h-3 animate-spin" />
                 ) : (
                   <RefreshCw className="w-3 h-3" />
                 )}
-                <span>Wczytaj aktywne modele z konta</span>
+                <span>Wczytaj wszystkie modele</span>
               </button>
             </div>
 
             {/* Model Select or Custom Input */}
-            {!customModelMode ? (
+            {!customGroqMode ? (
               <div className="space-y-1.5">
                 <select
                   value={settings.groqModel}
                   onChange={(e) => {
                     if (e.target.value === '__custom__') {
-                      setCustomModelMode(true);
+                      setCustomGroqMode(true);
                     } else {
                       setSettings((s) => ({ ...s, groqModel: e.target.value }));
                     }
                   }}
                   className="w-full px-3 py-2 rounded-xl bg-[#243235] border border-[#334346] text-xs text-slate-200 focus:outline-none focus:border-[#D97652]"
                 >
-                  {combinedGroqModels.map((modelId) => {
-                    const found = GROQ_MODELS.find((m) => m.id === modelId);
-                    return (
-                      <option key={modelId} value={modelId}>
-                        {found ? found.name : `${modelId}`}
-                      </option>
-                    );
-                  })}
-                  <option value="__custom__">Wpisz inną nazwę modelu...</option>
+                  {combinedGroqModels.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name}
+                    </option>
+                  ))}
+                  <option value="__custom__">+ Wpisz inną nazwę modelu...</option>
                 </select>
               </div>
             ) : (
@@ -361,7 +502,7 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
                   />
                   <button
                     type="button"
-                    onClick={() => setCustomModelMode(false)}
+                    onClick={() => setCustomGroqMode(false)}
                     className="px-2.5 py-1 text-xs text-[#BCC3C9] hover:text-white bg-[#243235] border border-[#334346] rounded-xl"
                   >
                     Lista
