@@ -24,6 +24,7 @@ import { exportToIcs, getCountdownBadge, triggerHaptic } from '../utils/calendar
 import { MONTHS } from '../data/categories';
 import {
   AIGenerationResult,
+  AIScriptLength,
   AITone,
   generateHolidaySocialIdeas,
   getAISettings,
@@ -45,6 +46,19 @@ const AI_TONES: { id: AITone; label: string; desc: string }[] = [
   { id: 'official', label: 'Akcja i Samorząd', desc: 'Integracja szkoły i wyzwanie dla klas' },
 ];
 
+const AI_SCRIPT_LENGTHS: { id: AIScriptLength; label: string; desc: string }[] = [
+  {
+    id: 'detailed',
+    label: 'Dokładny opis',
+    desc: 'Rozbudowany scenariusz z ujęciami, rekwizytami i dialogami',
+  },
+  {
+    id: 'short',
+    label: 'Krótki opis',
+    desc: 'Zwięzła ściągawka — 1 konkretne zdanie na każdą scenę',
+  },
+];
+
 export const HolidayDetailModal: React.FC<HolidayDetailModalProps> = ({
   holiday,
   isFavorite,
@@ -63,6 +77,7 @@ export const HolidayDetailModal: React.FC<HolidayDetailModalProps> = ({
   const [aiError, setAiError] = useState<string | null>(null);
   const [activeAITab, setActiveAITab] = useState<'tiktok' | 'facebook' | 'raw'>('tiktok');
   const [selectedTone, setSelectedTone] = useState<AITone>('humor');
+  const [scriptLength, setScriptLength] = useState<AIScriptLength>('detailed');
   const [isExpanded, setIsExpanded] = useState(false);
 
   useEffect(() => {
@@ -110,7 +125,7 @@ export const HolidayDetailModal: React.FC<HolidayDetailModalProps> = ({
     setTimeout(() => setCopiedAIRaw(false), 2000);
   };
 
-  const handleGenerateAI = async (toneToUse?: AITone) => {
+  const handleGenerateAI = async (toneToUse?: AITone, lengthToUse?: AIScriptLength) => {
     triggerHaptic();
     if (!isAIReady) {
       onOpenAISettings();
@@ -118,11 +133,12 @@ export const HolidayDetailModal: React.FC<HolidayDetailModalProps> = ({
     }
 
     const tone = toneToUse || selectedTone;
+    const length = lengthToUse || scriptLength;
     setIsGenerating(true);
     setAiError(null);
 
     try {
-      const result = await generateHolidaySocialIdeas(holiday, tone);
+      const result = await generateHolidaySocialIdeas(holiday, tone, length);
       setAiResult(result);
     } catch (err: any) {
       setAiError(err.message || 'Nie udało się wygenerować pomysłów przez AI.');
@@ -133,8 +149,16 @@ export const HolidayDetailModal: React.FC<HolidayDetailModalProps> = ({
 
   const handleToneSelect = (tone: AITone) => {
     setSelectedTone(tone);
-    if (isAIReady) {
-      handleGenerateAI(tone);
+    if (isAIReady && aiResult) {
+      handleGenerateAI(tone, scriptLength);
+    }
+  };
+
+  const handleScriptLengthSelect = (length: AIScriptLength) => {
+    triggerHaptic();
+    setScriptLength(length);
+    if (isAIReady && aiResult) {
+      handleGenerateAI(selectedTone, length);
     }
   };
 
@@ -164,47 +188,66 @@ export const HolidayDetailModal: React.FC<HolidayDetailModalProps> = ({
   };
 
   const renderScript = (scriptText: string) => {
-    const lines = scriptText
+    const rawLines = scriptText
       .split(/\r?\n/)
       .map((l) => l.trim())
       .filter(Boolean);
 
+    // Pair standalone timestamp lines (e.g. "0-3s", "[0-3s]", "(0-3s)") with the scene text line below
+    const entries: { time?: string; text: string }[] = [];
+    for (let i = 0; i < rawLines.length; i++) {
+      const line = rawLines[i];
+      const cleanLine = (str: string) =>
+        str.replace(/^\*\*\s*/, '').replace(/\s*\*\*$/, '').replace(/\*\*/g, '');
+
+      const timeOnlyMatch = line.match(
+        /^(?:\d+\.|\*|-)?\s*(?:\*\*)?(?:Scena\s*\d+\s*:?\s*)?[\[(]?(\d+\s*[-–]\s*\d+\s*s?)[\])]?(?:\*\*)?:?$/i
+      );
+      if (timeOnlyMatch && i + 1 < rawLines.length) {
+        entries.push({
+          time: timeOnlyMatch[1].replace(/\s+/g, ''),
+          text: cleanLine(rawLines[i + 1]),
+        });
+        i++;
+        continue;
+      }
+
+      const inlineMatch = line.match(
+        /^(?:\d+\.|\*|-)?\s*(?:\*\*)?(?:Scena\s*\d+\s*:?\s*)?[\[(]?(\d+\s*[-–]\s*\d+\s*s?)[\])]?(?:\*\*)?:?\s+(.*)$/i
+      );
+      if (inlineMatch) {
+        entries.push({
+          time: inlineMatch[1].replace(/\s+/g, ''),
+          text: cleanLine(inlineMatch[2]),
+        });
+        continue;
+      }
+
+      entries.push({ text: cleanLine(line) });
+    }
+
     return (
       <div className="space-y-2">
-        {lines.map((line, idx) => {
-          const match = line.match(
-            /^(\d+\.|\*|-)?\s*(?:\*\*)?(?:Scena\s*\d+\s*:?\s*)?\((\d+[-–]\d+s?)\)(?:\*\*)?:?\s*(.*)$/i
-          );
-          if (match) {
-            const time = match[2];
-            const text = match[3]
-              .replace(/^\*\*\s*/, '')
-              .replace(/\s*\*\*$/, '')
-              .replace(/\*\*/g, '');
-
-            return (
-              <div
-                key={idx}
-                className="flex items-start gap-2.5 bg-[#182022] p-3 rounded-xl border border-[#2C3B3E] text-xs sm:text-sm"
-              >
-                <span className="shrink-0 px-2 py-0.5 rounded-md bg-[#73321A]/30 text-[#F2AB91] border border-[#D97652]/40 font-mono font-bold text-[11px]">
-                  {time}
-                </span>
-                <p className="text-[#F8FAFC] leading-relaxed">{text}</p>
-              </div>
-            );
-          }
-
-          const cleanedLine = line.replace(/^\*\*\s*/, '').replace(/\s*\*\*$/, '').replace(/\*\*/g, '');
-          return (
+        {entries.map((entry, idx) =>
+          entry.time ? (
+            <div
+              key={idx}
+              className="flex items-start gap-2.5 bg-[#182022] p-3 rounded-xl border border-[#2C3B3E] text-xs sm:text-sm"
+            >
+              <span className="shrink-0 px-2 py-0.5 rounded-md bg-[#73321A]/30 text-[#F2AB91] border border-[#D97652]/40 font-mono font-bold text-[11px]">
+                {entry.time}
+              </span>
+              <p className="text-[#F8FAFC] leading-relaxed">{entry.text}</p>
+            </div>
+          ) : (
             <p
               key={idx}
               className="text-[#E2E8F0] text-xs sm:text-sm leading-relaxed bg-[#182022] p-2.5 rounded-xl border border-[#2C3B3E]"
             >
-              {cleanedLine}
+              {entry.text}
             </p>
-          );
-        })}
+          )
+        )}
       </div>
     );
   };
@@ -372,6 +415,32 @@ export const HolidayDetailModal: React.FC<HolidayDetailModalProps> = ({
             </div>
           </div>
 
+          {/* Script Length / Detail Selector */}
+          <div className="mb-3">
+            <label className="text-[10px] font-bold text-[#BCC3C9] uppercase tracking-wider block mb-1.5">
+              Długość i opis scenariusza:
+            </label>
+            <div className="grid grid-cols-2 gap-1.5">
+              {AI_SCRIPT_LENGTHS.map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => handleScriptLengthSelect(opt.id)}
+                  disabled={isGenerating}
+                  className={`py-2 px-3 rounded-xl text-left border transition-all ${
+                    scriptLength === opt.id
+                      ? 'bg-[#D97652]/20 border-[#D97652] text-white shadow-sm'
+                      : 'bg-[#182022] hover:bg-[#243235] text-[#BCC3C9] border-[#2C3B3E]'
+                  }`}
+                  title={opt.desc}
+                >
+                  <span className="block text-xs font-bold">{opt.label}</span>
+                  <span className="block text-[10px] opacity-80 truncate">{opt.desc}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* If No AI Key Configured Banner */}
           {!isAIReady && !aiResult && (
             <div className="mt-2 bg-[#182022] p-3.5 rounded-xl border border-[#2C3B3E] text-xs text-[#BCC3C9] flex items-center justify-between gap-3">
@@ -407,7 +476,8 @@ export const HolidayDetailModal: React.FC<HolidayDetailModalProps> = ({
                 Przygotowywanie scenariuszy ({aiSettings.provider === 'gemini' ? 'Google Gemini' : 'Groq'})...
               </p>
               <p className="text-[11px] text-[#BCC3C9]">
-                Klimat: {AI_TONES.find((t) => t.id === selectedTone)?.label}
+                Klimat: {AI_TONES.find((t) => t.id === selectedTone)?.label} •{' '}
+                {AI_SCRIPT_LENGTHS.find((l) => l.id === scriptLength)?.label}
               </p>
             </div>
           )}

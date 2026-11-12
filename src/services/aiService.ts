@@ -4,6 +4,8 @@ export type AIProvider = 'gemini' | 'groq';
 
 export type AITone = 'humor' | 'interview' | 'pov' | 'official';
 
+export type AIScriptLength = 'detailed' | 'short';
+
 export interface AISettings {
   provider: AIProvider;
   geminiApiKey: string;
@@ -36,6 +38,7 @@ export interface AIGenerationResult {
   provider: AIProvider;
   model: string;
   tone?: AITone;
+  scriptLength?: AIScriptLength;
 }
 
 const STORAGE_KEY = 'swieta_ai_settings';
@@ -212,7 +215,11 @@ export async function fetchLiveGroqModels(apiKey: string): Promise<AIModelOption
 /**
  * Builds high quality, viral prompt for school social media
  */
-function buildPrompt(holiday: Holiday, tone: AITone = 'humor'): string {
+function buildPrompt(
+  holiday: Holiday,
+  tone: AITone = 'humor',
+  scriptLength: AIScriptLength = 'detailed'
+): string {
   const otherHolidaysStr =
     holiday.allDayHolidays && holiday.allDayHolidays.length > 1
       ? `\nW tym samym dniu przypadają także inne okazje: ${holiday.allDayHolidays.join(', ')}.`
@@ -244,6 +251,28 @@ function buildPrompt(holiday: Holiday, tone: AITone = 'humor'): string {
       break;
   }
 
+  const isShort = scriptLength === 'short';
+
+  const lengthRules = isShort
+    ? `4. TRYB SZCZEGÓŁOWOŚCI: KRÓTKI I KONKRETNY (ekspresowa ściągawka do nagrania na przerwie!):
+   - HOOK: 1 krótkie, mocne zdanie (maks. 12 słów).
+   - SCENARIUSZ: dokładnie 3 lub 4 bardzo zwięzłe punkty — KAŻDY W JEDNEJ LINII jako 1 krótkie zdanie (np. "1. (0-3s) Kuba wchodzi z kartonem i pyta klasę: ..."). Zero długich opisów scenografii, ubrań i wielozdaniowych akapitów!
+   - DŹWIĘK i OPIS: po 1 krótkim zdaniu.
+   - FACEBOOK TREŚĆ: krótki, treściwy post — 1 zwięzły akapit (3-4 zdania).`
+    : `4. TRYB SZCZEGÓŁOWOŚCI: DOKŁADNY I ROZBUDOWANY (pełny scenariusz reżyserski!):
+   - HOOK: szczegółowy opis pierwszych 3 sekund (kadr, ruch kamery, rekwizyt, dokładne otwierające zdanie).
+   - SCENARIUSZ: 4 rozbudowane sceny krok po kroku ("1. (0-3s) ...", "2. (3-8s) ...", "3. (8-15s) ...", "4. (15-25s) ...") — w każdej wskaż ujęcie/kadr, rekwizyty, mimikę/akcję oraz pełne, żywe dialogi postaci.
+   - FACEBOOK TREŚĆ: rozbudowany, angażujący post na fanpage szkoły (2-3 estetyczne akapity).`;
+
+  const scriptTemplate = isShort
+    ? `1. (0-3s) [1 krótkie zdanie: kadr + pierwsza kwestia]
+2. (3-8s) [1 krótkie zdanie: główny żart/akcja]
+3. (8-15s) [1 krótkie zdanie: puenta i reakcja]`
+    : `1. (0-3s) [Dokładny opis ujęcia, rekwizytów i dialog]
+2. (3-8s) [Rozwinięcie akcji, reakcje osób i dialog]
+3. (8-15s) [Zwrot akcji, dynamika kamery i dialog]
+4. (15-25s) [Finał, puenta i mocne zakończenie]`;
+
   return `Jesteś wybitnym twórcą virali na TikToka/Reels oraz kreatywnym opiekunem mediów Samorządu Uczniowskiego w polskiej szkole.
 Twoim celem jest przygotować KOMPLETNY, PEŁNY pakiet materiałów (zarówno sekcję TIKTOK jak i sekcję FACEBOOK — nie przerywaj w połowie!) na święto:
 - Święto: "${holiday.name}"
@@ -254,25 +283,23 @@ Twoim celem jest przygotować KOMPLETNY, PEŁNY pakiet materiałów (zarówno se
 
 ZASADY:
 1. Dla świąt nietypowych/kontrowersyjnych (np. alkohol, toalety) zawsze twórz bezpieczną szkolną adaptację (np. sok jabłkowy zamiast wina, recenzja luster na korytarzu jak w hotelu).
-2. Pokaż konkretne postacie i dialogi: przewodniczący Samorządu, uczeń z 3B, nauczyciel chemii/WF/matematyki.
+2. Pisz poprawną, naturalną polszczyzną bez zmyślonych słów i literówek (używaj poprawnie nazwy "Samorząd Uczniowski", "SU").
 3. Wypełnij WSZYSTKIE pola poniżej dokładnie pod tymi etykietami (każda etykieta w nowej linii, bez żadnych bloków <think>):
+${lengthRules}
 
 === TIKTOK ===
 TYTUŁ: [Chwytliwy, krótki tytuł filmu]
-HOOK: [Dokładny hook na 0-3 sekundy: co widać na ekranie i pierwsze słowa]
+HOOK: [${isShort ? '1 krótkie zdanie na start (0-3s)' : 'Dokładny hook na 0-3 sekundy: co widać na ekranie i pierwsze słowa'}]
 SCENARIUSZ:
-1. (0-3s) [Opis ujęcia i dialog]
-2. (3-8s) [Opis akcji i dialog]
-3. (8-15s) [Zwrot akcji i dialog]
-4. (15-25s) [Puenta i finał]
+${scriptTemplate}
 DŹWIĘK: [Konkretna muzyka, trend audio z TikToka lub styl podkładu]
-OPIS: [Gotowy opis do wklejenia pod filmem z humorem]
+OPIS: [${isShort ? 'Krótki, 1-zdaniowy opis pod film' : 'Gotowy, barwny opis do wklejenia pod filmem z humorem'}]
 HASHTAGI: [Hashtagi z #]
 
 === FACEBOOK ===
 TYTUŁ: [Chwytliwy nagłówek posta]
 TREŚĆ:
-[Pełny post na fanpage szkoły - 2-3 estetyczne akapity z humorem i szkolnym duchem]
+[${isShort ? 'Krótki post na fanpage szkoły - 1 zwięzły akapit (3-4 zdania)' : 'Pełny post na fanpage szkoły - 2-3 estetyczne akapity z humorem i szkolnym duchem'}]
 CTA: [Chwytliwe pytanie do komentarza lub zadanie/wyzwanie dla uczniów]
 HASHTAGI: [Hashtagi pod post na FB]
 `;
@@ -594,7 +621,8 @@ export function parseGeneratedText(
   rawInput: string,
   provider: AIProvider,
   model: string,
-  tone?: AITone
+  tone?: AITone,
+  scriptLength?: AIScriptLength
 ): AIGenerationResult {
   const raw = stripThinkingTags(rawInput || '');
 
@@ -617,6 +645,7 @@ export function parseGeneratedText(
     provider,
     model,
     tone,
+    scriptLength,
   };
 
   if (!raw || typeof raw !== 'string') return result;
@@ -777,10 +806,11 @@ export function parseGeneratedText(
  */
 export async function generateHolidaySocialIdeas(
   holiday: Holiday,
-  tone: AITone = 'humor'
+  tone: AITone = 'humor',
+  scriptLength: AIScriptLength = 'detailed'
 ): Promise<AIGenerationResult> {
   const settings = getAISettings();
-  const prompt = buildPrompt(holiday, tone);
+  const prompt = buildPrompt(holiday, tone, scriptLength);
 
   let rawOutput = '';
   const provider = settings.provider;
@@ -814,7 +844,7 @@ export async function generateHolidaySocialIdeas(
     throw new Error('Nieznany dostawca AI.');
   }
 
-  return parseGeneratedText(rawOutput, provider, activeModel, tone);
+  return parseGeneratedText(rawOutput, provider, activeModel, tone, scriptLength);
 }
 
 /**
